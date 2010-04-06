@@ -1,0 +1,6 @@
+Build.PL
+lib/Exporter/Declare.pm
+MANIFEST			This list of files
+META.yml
+README
+t/Exporter.t
