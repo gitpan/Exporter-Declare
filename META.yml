@@ -13,14 +13,33 @@ name: Exporter-Declare
 provides:
   Exporter::Declare:
     file: lib/Exporter/Declare.pm
-    version: 0.003
+    version: 0.005
   Exporter::Declare::Base:
     file: lib/Exporter/Declare.pm
+  Exporter::Declare::QuickRecipe:
+    file: lib/Exporter/Declare/QuickRecipe.pm
+  Exporter::Declare::Recipe:
+    file: lib/Exporter/Declare/Recipe.pm
+  Exporter::Declare::Recipe::Begin:
+    file: lib/Exporter/Declare/Recipe/Begin.pm
+  Exporter::Declare::Recipe::Codeblock:
+    file: lib/Exporter/Declare/Recipe/Codeblock.pm
+  Exporter::Declare::Recipe::Export:
+    file: lib/Exporter/Declare/Recipe/Export.pm
+  Exporter::Declare::Recipe::Method:
+    file: lib/Exporter/Declare/Recipe/Method.pm
+  Exporter::Declare::Recipe::Sublike:
+    file: lib/Exporter/Declare/Recipe/Sublike.pm
 requires:
-  Test::Exception: 0
+  B::Compiling: 0.02
+  B::Hooks::EndOfScope: 0.08
+  B::Hooks::OP::Check: 0
+  Devel::BeginLift: 0
+  Devel::Declare: 0.006
+  Test::Exception::LessClever: 0
   Test::Simple: 0.88
 resources:
   bugtracker: http://github.com/exodist/Exporter-Declare/issues
   license: http://dev.perl.org/licenses/
   repository: http://github.com/exodist/Exporter-Declare
-version: 0.003
+version: 0.005

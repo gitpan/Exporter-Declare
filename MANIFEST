@@ -1,6 +1,16 @@
 Build.PL
 lib/Exporter/Declare.pm
+lib/Exporter/Declare/QuickRecipe.pm
+lib/Exporter/Declare/Recipe.pm
+lib/Exporter/Declare/Recipe/Begin.pm
+lib/Exporter/Declare/Recipe/Codeblock.pm
+lib/Exporter/Declare/Recipe/Export.pm
+lib/Exporter/Declare/Recipe/Method.pm
+lib/Exporter/Declare/Recipe/Sublike.pm
 MANIFEST			This list of files
 META.yml
 README
+t/Declare.t
 t/Exporter.t
+t/Recipe.t
+t/Recipes.t

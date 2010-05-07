@@ -10,7 +10,13 @@ my $build = Module::Build->new(
     create_readme => 1,
     requires => {
         'Test::Simple' => 0.88,
-        'Test::Exception' => 0,
+        'Test::Exception::LessClever' => 0,
+        'Devel::Declare' => 0.006000,
+        'B::Compiling' => 0.02,
+        'B::Hooks::EndOfScope' => 0.08,
+        'B::Hooks::OP::Check' => 0,
+        'Devel::BeginLift' => 0,
+
     },
     meta_merge => {
         resources => {
