@@ -6,6 +6,9 @@ use Test::More;
 use Test::Exception::LessClever;
 
 use_ok( "Exporter::Declare" );
+BEGIN {
+    use Exporter::Declare::Parser;
+}
 
 BEGIN {
     package Extended;
@@ -46,15 +49,17 @@ BEGIN {
 
     our @EXPORT = qw/f/;
 
-    export e => sub { 'e' };
+    export e => sub { 'e' }
 
     export('y', undef, sub { 100 });
 
     export x export { 100 }
 
+    export l { 100 }
+
     throws_ok { eval ' export z z { 1 } 1' || die $@ }
-    qr/'z' is not a valid recipe, did you forget to load the class that provides it?/,
-    "Invalid recipe";
+    qr/'z' is not a valid parser, did you forget to load the class that provides it?/,
+    "Invalid parser";
 
     sub f { 'f' }
 };
@@ -93,7 +98,7 @@ isa_ok( 'UseExtended', 'Exporter::Declare' );
 isa_ok( 'UseExtended', 'Exporter::Declare::Base' );
 is_deeply(
     [ sort keys %{ NormalUse->exports }],
-    [ 'e', 'f', 'x', 'y', ],
+    [ 'e', 'f', 'l', 'x', 'y', ],
     "Exports in normal use",
 );
 
@@ -101,7 +106,7 @@ throws_ok { NormalUse::export() }
     qr/You must provide a name to export\(\)/,
     "Must provide a name";
 
-throws_ok { NormalUse::export( 'bubba' )}
+throws_ok { NormalUse::export('bubba') }
     qr/No code found in 'main' for exported sub 'bubba'/,
     "Must have sub when adding export";
 
@@ -127,6 +132,7 @@ can_ok( 'UsePrefix', 'blah_c' );
     use Test::More;
     use Test::Exception::LessClever;
     BEGIN { NormalUse->import() };
+    is( l(), 100, "l works" );
     is( x(), 100, "x works" );
     my $x = x a { 100 }
 

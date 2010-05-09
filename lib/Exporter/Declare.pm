@@ -4,14 +4,9 @@ use warnings;
 
 use Carp;
 use Scalar::Util qw/blessed/;
-use Exporter::Declare::Recipe;
-use Exporter::Declare::Recipe::Export;
-use Exporter::Declare::Recipe::Sublike;
-use Exporter::Declare::Recipe::Codeblock;
-use Exporter::Declare::Recipe::Method;
-use Exporter::Declare::Recipe::Begin;
+use Exporter::Declare::Parser;
 
-our $VERSION = 0.005;
+our $VERSION = 0.006;
 our @CARP_NOT = ( __PACKAGE__ );
 export( 'export', 'export' );
 
@@ -51,17 +46,17 @@ sub exports {
     };
 }
 
-sub recipes {
+sub parsers {
     my $class = shift;
     no strict 'refs';
-    return { %{ $class . '::RECIPES' } };
+    return { %{ $class . '::PARSERS' } };
 }
 
 sub export_to {
     my $class = shift;
     my ( $dest, $prefix, @list ) = @_;
     my $exports = $class->exports;
-    my $recipes = $class->recipes;
+    my $parsers = $class->parsers;
     for my $name ( @list || keys %$exports ) {
         my $sub = $exports->{ $name };
         $sub = $class->can( $sub ) unless ref $sub eq 'CODE';
@@ -74,9 +69,9 @@ sub export_to {
             no strict 'refs';
             *{ $dest . '::' . $writename } = $sub;
         }
-        my $recipe = $recipes->{ $name };
-        next unless $recipe;
-        $recipe->rewrite( $dest, $name );
+        my $parser = $parsers->{ $name };
+        next unless $parser;
+        $parser->enhance( $dest, $name );
     }
 }
 
@@ -91,7 +86,7 @@ sub export {
                             );
 
     $exporter = blessed( $exporter ) || $exporter || caller;
-    my ( $name, $recipe ) = @_;
+    my ( $name, $parser ) = @_;
 
     croak( "You must provide a name to export()" )
         unless $name;
@@ -100,22 +95,22 @@ sub export {
         unless $sub;
 
     my $rclass;
-    if ( $recipe ) {
-        $rclass = Exporter::Declare::Recipe->get_recipe($recipe);
-        croak( "'$recipe' is not a valid recipe, did you forget to load the class that provides it?" )
+    if ( $parser ) {
+        $rclass = Exporter::Declare::Parser->get_parser($parser);
+        croak( "'$parser' is not a valid parser, did you forget to load the class that provides it?" )
             unless $rclass;
     }
 
     my $export;
-    my $recipes;
+    my $parsers;
     {
         no strict 'refs';
         no warnings 'once';
         $export = \%{ $exporter . '::EXPORT' };
-        $recipes = \%{ $exporter . '::RECIPES' };
+        $parsers = \%{ $exporter . '::PARSERS' };
     }
     $export->{ $name } = $sub;
-    $recipes->{ $name } = $rclass if $rclass;
+    $parsers->{ $name } = $rclass if $rclass;
 }
 
 package Exporter::Declare::Base;
@@ -136,23 +131,23 @@ __END__
 
 =head1 NAME
 
-Exporter::Declare - Declarative function exporting
+Exporter::Declare - Declarative exports and simple Devel-Declare interface.
 
 =head1 DESCRIPTION
 
 Declarative function exporting. You can export subs as usual with @EXPORT, or
 export anonymous subs under whatever name you want. You can also extend
-Exporter::Declare very easily. You can also add an export from outside the
-package using the export() class method on it.
+Exporter::Declare very easily.
 
 Exporter-Declare also provides a friendly interface to L<Devel::Declare> magic.
-If you want to provide methods that work like L<MooseX::Declare> or other
-L<Devel::Declare> enhanced function, this is the module for you. There are a
-few common recipes available for formatting exports.
+With Exporter-Declare and its parser library, you can write L<Devel::Declare>
+enhanced functions without directly using Devel-Declare. If no available parser
+meets your needs you can subclass L<Exporter::Declare::Parser> which provides a
+higher-level interface to L<Devel::Declare>
 
-=head1 EXPORTER SYNOPSIS
+=head1 BASIC SYNOPSIS
 
-=head2 Basic usage (No Devel-Declare)
+If you want to avoid magic you can still easily declare exports:
 
     package MyPackage;
     use strict;
@@ -162,16 +157,18 @@ few common recipes available for formatting exports.
     # works as expected
     our @EXPORT = qw/a/;
 
+    sub a { 'a' }
+
     # Declare an anonymous export
     export b => sub { 'b' };
+    export( 'c', sub { 'c' });
 
-    export 'c';
-    sub c { 'c' }
-    sub a { 'a' }
+    export 'd';
+    sub d { 'd' }
 
     1;
 
-=head2 Enhanced Exporting
+=head1 ENHANCED INTERFACE SYNOPSIS
 
 Notice, no need for '=> sub', and trailing semicolon is optional.
 
@@ -187,118 +184,208 @@ Notice, no need for '=> sub', and trailing semicolon is optional.
         'c'
     }
 
-    export d
-    {
-        'd'
-    }
-
     1;
 
-=head2 Exporting Devel-Declare magic
+=head1 EXPORTING DEVEL-DECLARE INTERFACES SYNOPSIS
+
+To export Devel-Declare magic you specify a parser as a second parameter to
+export(). Please see the PARSERS section for more information about each
+parser.
+
+    package MyPackage;
+    use strict;
+    use warnings;
+    use Exporter::Declare;
 
     export sl sublike {
-        ok( $name, "Got name" );
-        $code = pop(@_);
-    }
-
-    export cb codeblock {
-        $code = pop(@_);
+        # $name and $sub are automatically shifted for you.
+        ...
     }
 
     export mth method {
-        $code = pop(@_);
+        # $name and $sub are automatically shifted for you.
+        ...
+    }
+
+    export cb codeblock {
+        # $sub is automatically shifted for you.
+        ...
     }
 
     export beg begin {
         my @args = @_;
+        ...
     };
 
     # Inject something into the start of the code block
     export injected method ( inject => 'my $arg2 = shift; ' ) { ... }
 
-    # If you are brave and read up on Recipe's:
-    export custom ( recipe => \%myrecipe ) { ... }
-
 Then to use those in the importing class:
 
-    sl a { ... }
+    use strict;
+    use warnings;
+    use MyPackage;
 
-    cb { ... }
+    sl name { ... }
 
-    mth {
-        ok( $self, "got self" );
+    mth name {
+        # $self is automatically shifted for you.
         ...
     }
+
+    cb { ... }
 
     # Same as BEGIN { beg(@args) };
     beg( @args );
 
-=head2 Extending (Writing your own Exporter-Declare)
+=head1 MANY FACES OF EXPORT
 
-    package MyExporterDeclare;
-    use strict;
-    use warnings;
-    use Exporter::Declare ':extend';
+The export() function is the magical interface. It can be used in many forms:
 
-    export my_export => sub {
-        my ( $name, $sub ) = @_;
-        export( $name, $sub );
-    };
+=over 4
+
+=item our @EXPORT = @names;
+
+Technically your not actually using the function here, but it is worth noting
+that use of a package variable '@EXPORT' works just like L<Exporter>. However
+there is not currently an @EXPORT_OK.
+
+=item export($name)
+
+Export the sub specified by the string $name. This sub must be defined in the
+current package.
+
+=item export($name, sub { ... })
+
+=item export name => sub { ... }
+
+=item export name { ... }
+
+Export the coderef under the specified name. In the second 2 forms an ending
+semicolon is optional, as well name can be quoted in single or double quotes,
+or left as a bareword.
+
+=item export( $name, $parser )
+
+Export the sub specified by the string $name, applying the magic from the
+specified parser whenever the function is called by a class that imports it.
+
+=item export( $name, $parser, sub { ... })
+
+=item export name parser { ... }
+
+Export the coderef under the specified name, applying the magic from the
+specified parser whenever the function is called by a class that imports it. In
+the second form name and parser can be quoted in single or double quotes, or
+left as a bareword.
+
+=item export name ( ... ) { ... }
+
+same as 'export name { ... }' except that parameters can be passed into the
+parser. Currently you cannot put any variables in the ( ... ) as it will be
+evaluated as a string outside of any closures - This may be fixed in the
+future.
+
+Name can be a quoted string or a bareword.
+
+=item export name parser ( ... ) { ... }
+
+same as 'export name parser { ... }' except that parameters can be passed into
+the parser. Currently you cannot put any variables in the ( ... ) as it will be
+evaluated as a string outside of any closures - This may be fixed in the
+future.
+
+Name and parser can be a quoted string or a bareword.
+
+=item $class->export( $name )
+
+Method form of 'export( $name )'. $name must be the name of a subroutine in the
+package $class. The export will be added as an export of $class.
+
+=item $class->export( $name, sub { ... })
+
+Method form of 'export( $name, \&code )'. The export will be added as an export
+of $class.
+
+=item $class->export( $name, $parser )
+
+Method form of 'export( $name, $parser )'. $name must be the name of a
+subroutine in the package $class. The export will be added as an export of
+$class.
+
+=item $class->export( $name, $parser, sub { ... })
+
+Method form of 'export( $name, $parser, \&code )'. The export will be added as
+an export of $class.
+
+=back
 
 =head1 IMPORTER SYNOPSIS
 
 =head2 Normal
 
     package MyThing;
-    use strict;
-    use warnings;
     use MyThingThatExports;
 
 =head2 Import with a prefix
 
     package MyThing;
-    use strict;
-    use warnings;
     use MyThingThatExports ':prefix:myprefix';
 
 =head2 Import only some subs
 
     package MyThing;
-    use strict;
-    use warnings;
     use MyThingThatExports qw/ sub_a sub_b /;
 
-=head1 RECIPES
+=head1 Extending (Writing your own Exporter-Declare)
 
-=head2 Writing custom recipes
+Doing this will make it so that importing your package will not only import
+your exports, but it will also make the importing package capable of exporting
+subs.
 
-See L<Exporter::Declare::Recipe>
+    package MyExporterDeclare;
+    use strict;
+    use warnings;
+    use Exporter::Declare ':extend';
 
-=head2 Provided Recipes
+    export my_export export {
+        my ( $name, $sub ) = @_;
+        export( $name, $sub );
+    }
+
+=head1 PARSERS
+
+=head2 Writing custom parsers
+
+See L<Exporter::Declare::Parser>
+
+=head2 Provided Parsers
 
 =over 4
 
-=item L<Exporter::Declare::Recipe::Export>
+=item L<Exporter::Declare::Parser::Export>
 
-Used for export()
+Used for functions that export, accepting a name, a parser, and options.
 
-=item L<Exporter::Declare::Recipe::Sublike>
+=item L<Exporter::Declare::Parser::Sublike>
 
-Things that act like sub name {}
+Things that act like 'sub name {}'
 
-=item L<Exporter::Declare::Recipe::Codeblock>
+=item L<Exporter::Declare::Parser::Method>
+
+Same ad Sublike except codeblocks have $self automatically shifted off.
+
+=item L<Exporter::Declare::Parser::Codeblock>
 
 Things that take a single codeblock as an arg. Like defining sub mysub(&)
 except that you do not need a semicolon at the end.
 
-=item L<Exporter::Declare::Recipe::Method>
-
-Define codeblocks that have $self automatically shifted off.
-
-=item L<Exporter::Declare::Recipe::Begin>
+=item L<Exporter::Declare::Parser::Begin>
 
 Define a sub that works like 'use' in that it runs at compile time (like
 wrapping it in BEGIN{})
+
+This requires L<Devel::BeginLift>.
 
 =back
 

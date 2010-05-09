@@ -1,5 +1,5 @@
 ---
-abstract: 'Declarative function exporting'
+abstract: 'Declarative exports and simple Devel-Declare interface.'
 author:
   - 'Chad Granum <exodist7@gmail.com>'
 configure_requires:
@@ -13,28 +13,26 @@ name: Exporter-Declare
 provides:
   Exporter::Declare:
     file: lib/Exporter/Declare.pm
-    version: 0.005
+    version: 0.006
   Exporter::Declare::Base:
     file: lib/Exporter/Declare.pm
-  Exporter::Declare::QuickRecipe:
-    file: lib/Exporter/Declare/QuickRecipe.pm
-  Exporter::Declare::Recipe:
-    file: lib/Exporter/Declare/Recipe.pm
-  Exporter::Declare::Recipe::Begin:
-    file: lib/Exporter/Declare/Recipe/Begin.pm
-  Exporter::Declare::Recipe::Codeblock:
-    file: lib/Exporter/Declare/Recipe/Codeblock.pm
-  Exporter::Declare::Recipe::Export:
-    file: lib/Exporter/Declare/Recipe/Export.pm
-  Exporter::Declare::Recipe::Method:
-    file: lib/Exporter/Declare/Recipe/Method.pm
-  Exporter::Declare::Recipe::Sublike:
-    file: lib/Exporter/Declare/Recipe/Sublike.pm
+  Exporter::Declare::Parser:
+    file: lib/Exporter/Declare/Parser.pm
+  Exporter::Declare::Parser::Begin:
+    file: lib/Exporter/Declare/Parser/Begin.pm
+  Exporter::Declare::Parser::Codeblock:
+    file: lib/Exporter/Declare/Parser/Codeblock.pm
+  Exporter::Declare::Parser::Emulate:
+    file: lib/Exporter/Declare/Parser/Emulate.pm
+  Exporter::Declare::Parser::Export:
+    file: lib/Exporter/Declare/Parser/Export.pm
+  Exporter::Declare::Parser::Method:
+    file: lib/Exporter/Declare/Parser/Method.pm
+  Exporter::Declare::Parser::Sublike:
+    file: lib/Exporter/Declare/Parser/Sublike.pm
 requires:
   B::Compiling: 0.02
   B::Hooks::EndOfScope: 0.08
-  B::Hooks::OP::Check: 0
-  Devel::BeginLift: 0
   Devel::Declare: 0.006
   Test::Exception::LessClever: 0
   Test::Simple: 0.88
@@ -42,4 +40,4 @@ resources:
   bugtracker: http://github.com/exodist/Exporter-Declare/issues
   license: http://dev.perl.org/licenses/
   repository: http://github.com/exodist/Exporter-Declare
-version: 0.005
+version: 0.006
