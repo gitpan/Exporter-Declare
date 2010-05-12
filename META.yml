@@ -13,12 +13,12 @@ name: Exporter-Declare
 provides:
   Exporter::Declare:
     file: lib/Exporter/Declare.pm
-    version: 0.012
+    version: 0.014
   Exporter::Declare::Base:
     file: lib/Exporter/Declare.pm
 requires:
   Carp: 0
-  Devel::Declare::Parser: 0.012
+  Devel::Declare::Parser: 0.014
   Scalar::Util: 0
   Test::Exception::LessClever: 0
   Test::Simple: 0.88
@@ -26,4 +26,4 @@ resources:
   bugtracker: http://github.com/exodist/Exporter-Declare/issues
   license: http://dev.perl.org/licenses/
   repository: http://github.com/exodist/Exporter-Declare
-version: 0.012
+version: 0.014
