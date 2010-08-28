@@ -4,7 +4,7 @@ author:
   - 'Chad Granum <exodist7@gmail.com>'
 configure_requires:
   Module::Build: 0.36
-generated_by: 'Module::Build version 0.3603'
+generated_by: 'Module::Build version 0.3607'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -13,11 +13,9 @@ name: Exporter-Declare
 provides:
   Exporter::Declare:
     file: lib/Exporter/Declare.pm
-    version: 0.017
+    version: 0.018
   Exporter::Declare::Base:
     file: lib/Exporter/Declare.pm
-  Exporter::Declare::Export:
-    file: lib/Exporter/Declare/Export.pm
 requires:
   Carp: 0
   Devel::Declare::Parser: 0.017
@@ -26,6 +24,7 @@ requires:
   Test::Simple: 0.88
 resources:
   bugtracker: http://github.com/exodist/Exporter-Declare/issues
+  homepage: http://open-exodus.net/projects/Exporter-Declare
   license: http://dev.perl.org/licenses/
   repository: http://github.com/exodist/Exporter-Declare
-version: 0.017
+version: 0.018

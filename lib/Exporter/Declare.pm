@@ -7,10 +7,12 @@ use Scalar::Util qw/blessed/;
 use Devel::Declare::Interface;
 use Exporter::Declare::Export;
 
-our $VERSION = 0.017;
+our $VERSION = 0.018;
 our @CARP_NOT = ( __PACKAGE__ );
 our %PARSERS = ( export => Devel::Declare::Interface::get_parser('export'));
 export( 'export', 'export' );
+
+sub _import { 1 };
 
 sub import {
     my $class = shift;
@@ -24,6 +26,8 @@ sub import {
     no warnings 'once';
     push @{ $caller . '::ISA' } => $base
         unless grep { $_ eq $base } @{ $caller . '::ISA' };
+
+    return $class->_import( $caller );
 }
 
 sub _import_args {
@@ -122,6 +126,7 @@ sub import {
     my $caller = caller;
     my ( $imports, $specs ) = $class->_import_args( @_ );
     $class->export_to( $caller, $specs->{prefix} || undef, @$imports );
+    return $class->_import( $caller );
 }
 
 1;
@@ -383,6 +388,25 @@ Define a sub that works like 'use' in that it runs at compile time (like
 wrapping it in BEGIN{})
 
 This requires L<Devel::BeginLift>.
+
+=back
+
+=head1 FENNEC PROJECT
+
+This module is part of the Fennec project. See L<Fennec> for more details.
+Fennec is a project to develop an extendable and powerful testing framework.
+Together the tools that make up the Fennec framework provide a potent testing
+environment.
+
+The tools provided by Fennec are also useful on their own. Sometimes a tool
+created for Fennec is useful outside the greator framework. Such tools are
+turned into their own projects. This is one such project.
+
+=over 2
+
+=item L<Fennec> - The core framework
+
+The primary Fennec project that ties them all together.
 
 =back
 
