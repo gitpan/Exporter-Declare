@@ -27,12 +27,16 @@ BEGIN {
         is( $_[1], "export", "got parser" );
         is( $inject, 1, "injected" );
     }
+
+    export_ok optional { 'You got me' }
 }
 
-BEGIN { MyExporter->import };
+BEGIN { MyExporter->import( ':all' ) };
 
 eexport name export { 1 };
 is( apple(), "apple", "export name and block" );
 is( pear(), "pear", "export name and block with specs" );
+
+is( optional(), 'You got me', "export_ok magic" );
 
 done_testing();

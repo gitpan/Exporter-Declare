@@ -7,10 +7,10 @@ use Scalar::Util qw/blessed/;
 use Devel::Declare::Interface;
 use Exporter::Declare::Export;
 
-our $VERSION = '0.020';
+our $VERSION = '0.021';
 our @CARP_NOT = ( __PACKAGE__ );
 our %PARSERS = ( export => Devel::Declare::Interface::get_parser('export'));
-our @EXPORT = qw/ export export_ok export_to import /;
+our @EXPORT = qw/ export_to import /;
 our @EXPORT_OK = qw/ exports export_oks parsers exporter_tags all_exports /;
 our %EXPORTER_TAGS = (
     all      => sub { keys %{ all_exports( @_ )}},
@@ -18,6 +18,9 @@ our %EXPORTER_TAGS = (
     DEFAULT  => sub { keys %{ exports( @_ )    }},
     extended => sub { keys %{ export_oks( @_ ) }},
 );
+
+export( 'export', 'export' );
+export( 'export_ok', 'export' );
 
 sub import {
     my $class = shift;
