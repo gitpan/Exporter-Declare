@@ -13,7 +13,7 @@ name: Exporter-Declare
 provides:
   Exporter::Declare:
     file: lib/Exporter/Declare.pm
-    version: 0.022
+    version: 0.023
 requires:
   Carp: 0
   Devel::Declare::Parser: 0.017
@@ -25,4 +25,4 @@ resources:
   homepage: http://open-exodus.net/projects/Exporter-Declare
   license: http://dev.perl.org/licenses/
   repository: http://github.com/exodist/Exporter-Declare
-version: 0.022
+version: 0.023
