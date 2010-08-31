@@ -1,5 +1,6 @@
 Build.PL
 lib/Exporter/Declare.pm
+lib/Exporter/Declare/Export.pm
 MANIFEST			This list of files
 META.yml
 README
