@@ -7,3 +7,4 @@ README
 t/Declare.t
 t/Exporter.t
 t/legacy.t
+t/Variables.t
