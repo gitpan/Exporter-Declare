@@ -2,6 +2,10 @@
 abstract: 'Declarative exporting, better import interface.'
 author:
   - 'Chad Granum <exodist7@gmail.com>'
+build_requires:
+  Fennec::Lite: 0.004
+  Test::Exception: 0
+  Test::Simple: 0.88
 configure_requires:
   Module::Build: 0.36
 generated_by: 'Module::Build version 0.3607'
@@ -13,7 +17,7 @@ name: Exporter-Declare
 provides:
   Exporter::Declare:
     file: lib/Exporter/Declare.pm
-    version: 0.100
+    version: 0.101
   Exporter::Declare::Export:
     file: lib/Exporter/Declare/Export.pm
   Exporter::Declare::Export::Alias:
@@ -40,4 +44,4 @@ resources:
   homepage: http://open-exodus.net/projects/Exporter-Declare
   license: http://dev.perl.org/licenses/
   repository: http://github.com/exodist/Exporter-Declare
-version: 0.100
+version: 0.101
