@@ -1,139 +1,99 @@
 package Exporter::Declare::Export;
 use strict;
 use warnings;
+use Carp qw/croak carp/;
+use Scalar::Util qw/reftype/;
 
-use base 'Devel::Declare::Parser';
-use Devel::Declare::Interface;
-BEGIN { Devel::Declare::Interface::register_parser( 'export' )};
+our %OBJECT_DATA;
 
-__PACKAGE__->add_accessor( '_inject' );
-__PACKAGE__->add_accessor( 'parser' );
+sub required_specs {qw/ exported_by /}
+
+sub new {
+    my $class = shift;
+    my ( $item, %specs ) = @_;
+    my $self = bless( $item, $class );
+
+    for my $prop ( $self->required_specs ) {
+        croak "You must specify $prop when calling $class\->new()"
+            unless $specs{$prop};
+    }
+
+    $OBJECT_DATA{$self} = \%specs;
+
+    return $self;
+}
+
+sub _data {
+    my $self = shift;
+    ($OBJECT_DATA{$self}) = @_ if @_;
+    $OBJECT_DATA{$self};
+}
+
+sub exported_by {
+    shift->_data->{ exported_by };
+}
 
 sub inject {
     my $self = shift;
-    my @out;
-
-    if( my $items = $self->_inject() ) {
-        my $ref = ref( $items );
-        if ( $ref eq 'ARRAY' ) {
-            push @out => @$items;
-        }
-        elsif ( !$ref ) {
-            push @out => $items;
-        }
-        else {
-            $self->bail( "$items is not a valid injection" );
-        }
-    }
-    return @out;
+    my ( $class, $name, @args ) = @_;
+    carp "Ignoring arguments importing (" . reftype($self) . ")$name into $class"
+        if @args;
+    croak "You must provide a class and name to inject()"
+        unless $class && $name;
+    no strict 'refs';
+    no warnings 'once';
+    *{"$class\::$name"} = $self;
 }
 
-sub _check_parts {
+sub DESTROY {
     my $self = shift;
-    $self->bail( "You must provide a name to " . $self->name . "()" )
-        if ( !$self->parts || !@{ $self->parts });
-
-    if ( @{ $self->parts } > 3 ) {
-        ( undef, undef, undef, my @bad ) = @{ $self->parts };
-        $self->bail(
-            "Syntax error near: " . join( ' and ',
-                map { $self->format_part($_)} @bad
-            )
-        );
-    }
-}
-
-sub sort_parts {
-    my $self = shift;
-    $self->bail(
-        "Parsing Error, unrecognized tokens: "
-        . join( ', ', map {"'$_'"} $self->has_non_string_or_quote_parts )
-    ) if $self->has_non_string_or_quote_parts;
-
-    my ( @names, @specs );
-    for my $part (@{ $self->parts }) {
-        $self->bail( "Bad part: $part" ) unless ref($part);
-        $part->[1] && $part->[1] eq '('
-            ? ( push @specs => $part )
-            : ( push @names => $part )
-    }
-
-    if ( @names > 2 ) {
-        ( undef, undef, my @bad ) = @names;
-        $self->bail(
-            "Syntax error near: " . join( ' and ',
-                map { $self->format_part($_)} @bad
-            )
-        );
-    }
-
-    return ( \@names, \@specs );
-}
-
-sub strip_prototype {
-    my $self = shift;
-    my $parts = $self->parts;
-    return unless @$parts > 3;
-    return unless ref( $parts->[2] );
-    return unless $parts->[2]->[0] eq 'sub';
-    return unless ref( $parts->[3] );
-    return unless $parts->[3]->[1] eq '(';
-    return unless !$parts->[2]->[1];
-    $self->prototype(
-          $parts->[3]->[1]
-        . $parts->[3]->[0]
-        . $self->end_quote($parts->[3]->[1])
-    );
-    delete $parts->[3];
-}
-
-sub rewrite {
-    my $self = shift;
-
-    $self->strip_prototype;
-    $self->_check_parts;
-
-    my $is_arrow = $self->parts->[1]
-                && ($self->parts->[1] eq '=>' || $self->parts->[1] eq ',');
-    if ( $is_arrow && $self->parts->[2] ) {
-        my $is_ref = !ref( $self->parts->[2] );
-        my $is_sub = $is_ref ? 0 : $self->parts->[2]->[0] eq 'sub';
-
-        if (( $is_arrow && $is_ref )
-        || ( @{ $self->parts } == 1 )) {
-            $self->new_parts([ $self->parts->[0], $self->parts->[2] ]);
-            return 1;
-        }
-        elsif (( $is_arrow && $is_sub )
-        || ( @{ $self->parts } == 1 )) {
-            $self->new_parts([ $self->parts->[0] ]);
-            return 1;
-        }
-    }
-
-    my ( $names, $specs ) = $self->sort_parts();
-    $self->parser( $names->[1] ? $names->[1]->[0] : undef );
-    push @$names => 'undef' unless @$names > 1;
-    $self->new_parts( $names );
-
-    if ( @$specs ) {
-        $self->bail( "Too many spec defenitions" )
-            if @$specs > 1;
-        my $specs = eval "{ " . $specs->[0]->[0] . " }"
-              || $self->bail($@);
-        $self->_inject( delete $specs->{ inject });
-    }
-
-    1;
+    delete $OBJECT_DATA{$self};
 }
 
 1;
 
-__END__
-
 =head1 NAME
 
-Exporter::Declare::Export - The parser behind the export() magic.
+Exporter::Declare::Export - Base class for all export objects.
+
+=head1 DESCRIPTION
+
+All exports are refs, and all are blessed. This class tracks some per-export
+information via an inside-out objects system. All things an export may need to
+do, such as inject itself into a package are handled here. This allows some
+complicated, or ugly logic to be abstracted out of the exporter and metadata
+classes.
+
+=head1 METHODS
+
+=over
+
+=item $class->new( $ref, exported_by => $package, %data )
+
+Create a new export from $ref. You must specify the name of the class doing the
+exporting.
+
+=item $export->inject( $package, $name, @args )
+
+This will inject the export into $package under $name. @args are ignored in
+most cases. See L<Exporter::Declare::Export::Generator> for an example where
+they are used.
+
+=item $package = $export->exported_by()
+
+Returns the name of the package from which this export was originally exported.
+
+=item @params = $export->required_specs()
+
+Documented for subclassing purposes. This should always return a list of
+required parameters at construction time.
+
+=item $export->DESTROY()
+
+Documented for subclassing purposes. This takes care of cleanup related to
+storing data in an inside-out objects system.
+
+=back
 
 =head1 AUTHORS
 

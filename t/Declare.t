@@ -1,53 +1,150 @@
 #!/usr/bin/perl
 use strict;
 use warnings;
-use Test::More;
 
+use Fennec::Lite;
+use aliased 'Exporter::Declare::Meta';
+use aliased 'Exporter::Declare::Specs';
+use aliased 'Exporter::Declare::Export::Sub';
+use aliased 'Exporter::Declare::Export::Variable';
+
+our $CLASS;
+our @IMPORTS;
 BEGIN {
-    package MyExporter;
-    use strict;
-    use warnings;
-    use Test::More;
-    use Exporter::Declare;
-    use Test::Exception::LessClever;
+    @IMPORTS = qw/
+        export gen_export default_export gen_default_export import export_to
+        exports default_exports parsed_exports parsed_default_exports reexport
+        import_options import_arguments parser export_tag
+    /;
 
-    sub normal { 1 };
-    export normala => sub { 1 };
-    export normalb => \&normal;
-    export 'normal';
-
-    # export name parser { ... }
-
-    export apple { 'apple' }
-
-    export pear ( inject => 'my $pear = "pear";' ) { $pear }
-
-    export eexport export ( inject => 'my $inject = 1;' ) {
-        is( $_[0], "name", "got name" );
-        is( $_[1], "export", "got parser" );
-        is( $inject, 1, "injected" );
-    }
-
-    export_ok optional { 'You got me' }
-
-    my $id = 1;
-    gen_export id => sub { my $i = $id++; sub { $i }};
-    my $id2 = 10;
-    gen_export_ok id2 => sub { my $i = $id2++; sub { $i }};
+    $CLASS = "Exporter::Declare";
+    require_ok $CLASS;
+    $CLASS->import( '-alias', @IMPORTS );
 }
 
-BEGIN { MyExporter->import( ':all' ) };
+sub xxx {'xxx'}
 
-eexport name export { 1 };
-is( apple(), "apple", "export name and block" );
-is( pear(), "pear", "export name and block with specs" );
+tests package_usage => sub {
+    can_ok( $CLASS, 'export_meta' );
+    can_ok( __PACKAGE__, @IMPORTS, 'Declare' );
+    can_ok( __PACKAGE__, 'export_meta' );
 
-is( optional(), 'You got me', "export_ok magic" );
+    is( Declare(), $CLASS, "Aliased" );
 
-is( id(), 1, "ID" );
-is( id(), 1, "ID Again" );
+    is_deeply(
+        [ sort( Declare()->exports )],
+        [ sort map {"\&$_" } @IMPORTS, 'Declare' ],
+        "Export list"
+    );
 
-is( id2(), 10, "ID2" );
-is( id2(), 10, "ID2 Again" );
+    is_deeply(
+        [ sort( Declare()->default_exports )],
+        [ sort qw/exports default_exports import import_options import_arguments export_tag/ ],
+        "Default Exports"
+    );
+};
 
-done_testing();
+tests magic => sub {
+    lives_ok { export a b {} } "export magic";
+    lives_ok {
+        export b => sub {};
+        export c => \&xxx;
+        export 'xxx';
+    } "export magic non-interfering";
+
+    is( __PACKAGE__->export_meta->get_export( 'xxx' ), \&xxx, "export added" );
+};
+
+{
+    package Export::Stuff;
+    use Exporter::Declare '-magic';
+
+    sub a    { 'a'       }
+    sub b    { 'b'       }
+    sub c    { 'c'       }
+    sub meth { return @_ }
+
+    our $X = 'x';
+    our $Y = 'y';
+    our $Z = 'z';
+
+    exports qw/ $Y b /;
+    default_exports qw/ $X a /;
+    import_options qw/xxx yyy/;
+    import_arguments qw/ foo bar /;
+    export_tag vars => qw/ $X $Y /;
+    export_tag subs => qw/ a b /;
+
+    export $Z;
+    export c;
+    export baz { 'baz' }
+    export eexport export { return @_ }
+
+    my $gen = 0;
+    gen_export gexp { my $out = $gen++; sub { $out }}
+    gen_default_export defgen { my $out = $gen++; sub { $out }}
+}
+
+tests magic_tag => sub {
+    # This tests that the magic tag brings in the magic methods as well as the
+    # default which is a nested tag.
+    can_ok( 'Export::Stuff', qw/
+        export gen_export default_export gen_default_export parser
+        parsed_exports parsed_default_exports import exports default_exports
+        import_options import_arguments export_tag
+    /);
+};
+
+tests generator => sub {
+    Export::Stuff->import(qw/gexp/);
+    is( gexp(), 0, "Generated first" );
+    Export::Stuff->import(qw/defgen/);
+    is( defgen(), 1, "Generated second" );
+    Export::Stuff->import( defgen => { -as => 'blah' });
+    is( blah(), 2, "Generated again" );
+};
+
+tests tags_options_and_exports => sub {
+    is_deeply(
+        [ sort keys %{ Export::Stuff->export_meta->_exports }],
+        [ sort qw/ $Y &b $X &a &Stuff $Z &c &baz &eexport &gexp &defgen /],
+        "All exports accounted for"
+    );
+    is_deeply(
+        [ sort @{ Export::Stuff->export_meta->_export_tags->{default} }],
+        [ sort qw/ $X a defgen /],
+        "Default Exports"
+    );
+    is_deeply(
+        [ sort @{ Export::Stuff->export_meta->_export_tags->{all} }],
+        [ sort qw/ $Y &b $X &a &Stuff $Z &c &baz &eexport &gexp &defgen /],
+        "All Exports"
+    );
+    is_deeply(
+        Export::Stuff->export_meta->_options,
+        {
+            xxx => 0,
+            yyy => 0,
+            foo => 1,
+            bar => 1,
+            suffix => 1,
+            prefix => 1,
+        },
+        "Options"
+    );
+    is_deeply(
+        Export::Stuff->export_meta->_export_tags,
+        {
+            alias => [ 'Stuff' ],
+            vars => [qw/ $X $Y /],
+            subs => [qw/ a b /],
+            # These are checked elsware
+            default => Export::Stuff->export_meta->_export_tags->{'default'},
+            all => Export::Stuff->export_meta->_export_tags->{all}
+        },
+        "Extra tags"
+    );
+};
+
+run_tests;
+done_testing;

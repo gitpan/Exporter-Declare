@@ -2,791 +2,672 @@ package Exporter::Declare;
 use strict;
 use warnings;
 
-use Carp;
-use Scalar::Util qw/blessed/;
-use Devel::Declare::Interface;
-use Exporter::Declare::Export;
+use Carp qw/croak/;
+use Devel::Declare::Parser::Sublike;
+use Scalar::Util qw/reftype/;
+use aliased 'Exporter::Declare::Meta';
+use aliased 'Exporter::Declare::Specs';
+use aliased 'Exporter::Declare::Export::Sub';
+use aliased 'Exporter::Declare::Export::Variable';
+use aliased 'Exporter::Declare::Export::Generator';
 
-our $VERSION = '0.025';
-our @CARP_NOT = ( __PACKAGE__ );
-our %PARSERS = ( export => Devel::Declare::Interface::get_parser('export'));
-our @EXPORT = qw/ export_to import /;
-our @EXPORT_OK = qw/
-    exports export_oks parsers exporter_tags all_exports gen_exports
-    gen_export_oks all_gen_exports
-/;
-our %EXPORTER_TAGS = (
-    all => sub {
-        keys( %{ all_exports( @_ )    }),
-        keys( %{ all_gen_exports( @_ )}),
-    },
-    default => sub {
-        keys( %{ exports( @_ )    }),
-        keys( %{ gen_exports( @_ )}),
-    },
-    DEFAULT => sub {
-        keys( %{ exports( @_ )    }),
-        keys( %{ gen_exports( @_ )}),
-    },
-    extended => sub {
-        keys( %{ export_oks( @_ )    }),
-        keys( %{ gen_export_oks( @_ )}),
-    },
-);
+BEGIN { Meta->new( __PACKAGE__ )}
 
-export( 'export',        'export' );
-export( 'export_ok',     'export' );
-export( 'gen_export',    'export' );
-export( 'gen_export_ok', 'export' );
+our $VERSION = '0.100';
+
+default_exports( qw/
+    import
+    exports
+    default_exports
+    import_options
+    import_arguments
+    export_tag
+/);
+
+exports( qw/
+    parsed_exports
+    parsed_default_exports
+    reexport
+    export_to
+/);
+
+parsed_exports( export => qw/
+    export
+    gen_export
+    default_export
+    gen_default_export
+    parser
+/);
+
+export_tag( magic => qw/
+    -default
+    export
+    gen_export
+    default_export
+    gen_default_export
+    parser
+    parsed_exports
+    parsed_default_exports
+/);
 
 sub import {
     my $class = shift;
     my $caller = caller;
-    my ( $imports, $specs ) = _import_args( @_ );
-
-    export_to( $class, $caller, $specs, @$imports );
-
-    if ( $specs->{extend} ) {
-        no strict 'refs';
-        no warnings 'once';
-        push @{ $caller . '::ISA' } => $class
-            unless grep { $_ eq $class } @{ $caller . '::ISA' };
-
-        $caller->export( $_ ) for
-            grep { $caller->can( $_ ) }
-                keys %{ exports($class)};
-
-        $caller->export_ok( $_ ) for
-            grep { $caller->can( $_ ) }
-                keys %{ export_oks($class)};
-    }
-
-    return $class->_import( $caller, $specs )
-        if $class->can( '_import' );
+    my $specs = export_to( $class, $caller, @_ );
+    $class->after_import( $caller, $specs )
+        if $class->can( 'after_import' );
 }
 
-sub _import_args {
-    my ( @imports, %specs );
-    for my $item ( @_ ) {
-        if ( ref $item && ref $item eq 'HASH' ) {
-            $specs{ rename } = $item;
-        }
-        elsif ( $item =~ m/^(!?):([^:]*)(?::(.*))?$/ ) {
-            $specs{ $2 } = [ !$1, $3 || 1 ];
-        }
-        else {
-            push @imports => $item;
-        }
-    }
-    return( \@imports, \%specs );
-}
-
-sub exports {
+sub after_import {
     my $class = shift;
-    no strict 'refs';
-    no warnings 'once';
-    return {
-        ( map { $_ => $_ } @{ $class . '::EXPORT' }),
-        %{ $class . '::EXPORT' },
-    };
-}
-
-sub export_oks {
-    my $class = shift;
-    no strict 'refs';
-    no warnings 'once';
-    return {
-        ( map { $_ => $_ } @{ $class . '::EXPORT_OK' }),
-        %{ $class . '::EXPORT_OK' },
-    };
-}
-
-sub all_exports {
-    my $class = shift;
-    return {
-        %{ export_oks( $class ) },
-        %{ exports( $class )    },
-    };
-}
-
-sub all_gen_exports {
-    my $class = shift;
-    return {
-        %{ gen_export_oks( $class ) },
-        %{ gen_exports( $class )    },
-    };
-}
-
-sub gen_exports {
-    my $class = shift;
-    no strict 'refs';
-    no warnings 'once';
-    \%{ $class . '::GEN_EXPORT' };
-}
-
-sub gen_export_oks {
-    my $class = shift;
-    no strict 'refs';
-    no warnings 'once';
-    \%{ $class . '::GEN_EXPORT_OK' };
-}
-
-sub parsers {
-    my $class = shift;
-    no strict 'refs';
-    no warnings 'once';
-    return { %{ $class . '::PARSERS' } };
-}
-
-sub exporter_tags {
-    my $class = shift;
-    no strict 'refs';
-    no warnings 'once';
-    return {
-        %EXPORTER_TAGS,
-        %{ $class . '::EXPORTER_TAGS' }
-    };
-}
-
-sub _tag_list {
-    my ( $class, $tag ) = @_;
-    my $list = exporter_tags( $class )->{ $tag };
-    return unless $list;
-
-    return ref $list eq 'CODE'
-        ? $list->($class)
-        : @$list;
-}
-
-sub _normalize_import_list {
-    my ( $class, $specs, @list ) = @_;
-    my ( %include, %exclude );
-
-    return $class->normalize_import_list(
-        $class, $specs, @list
-    ) if $class->can( 'normalize_import_list' );
-
-    for my $tag ( keys %{ exporter_tags( $class )}) {
-        next unless my $spec = $specs->{$tag};
-
-        if ( $spec->[0] )
-          { $include{ $_ }++ for _tag_list( $class, $tag )}
-        else
-          { $exclude{ $_ }++ for _tag_list( $class, $tag )}
-    }
-
-    @list = _tag_list( $class, 'default' )
-        unless @list || keys %include;
-
-    for my $item ( @list ) {
-        if ( $item =~ m/^!(.*)$/ )
-          { $exclude{ $1 }++ }
-        else
-          { $include{ $item }++ }
-    }
-
-    return grep { !$exclude{ $_ } } keys %include;
+    my ( $caller, $specs ) = @_;
+    Meta->new( $caller );
 }
 
 sub export_to {
-    my ( $class, $dest, $specs, @list ) = @_;
-    $specs = { prefix => [ 1, $specs ]}
-        if $specs && !ref $specs;
-    $specs ||= {};
-
-    my $parsers = parsers( $class );
-    my $all_exports = all_exports( $class );
-    my $generated = all_gen_exports( $class );
-
-    @list = _normalize_import_list( $class, $specs, @list );
-
-    for my $name ( @list ) {
-        my $item = $all_exports->{ $name }
-            || ( $generated->{$name}
-                ? $generated->{$name}->( $class, $dest )
-                : croak "'$name' is not exported by $class."
-               );
-
-        $item = _get_item_ref( $class, $item ) unless ref $item;
-
-        croak "Could not find '$name' in $class for export. Got: "
-              . ( defined( $item ) ? "'$item'" : 'undef' )
-              unless $item && ref($item);
-
-        {
-            no strict 'refs';
-            no warnings 'once';
-            *{ join( '::',
-                $dest,
-                _export_name( $class, $name, $specs ),
-            )} = $item;
-        }
-
-        my $parser = $parsers->{ $name };
-        Devel::Declare::Interface::enhance(
-            $dest,
-            $name,
-            $parser,
-        ) if $parser;
-    }
+    my $class = _find_export_class( \@_ );
+    my ( $dest, @args ) = @_;
+    my $specs = Specs->new( $class, @args );
+    $specs->export( $dest );
+    return $specs;
 }
 
-sub _export_name {
-    my $class = shift;
-    my ( $name, $specs ) = @_;
-
-    return $class->export_name( $name, $specs )
-        if $class->can( 'export_name' );
-
-    my $calculated = ( $specs->{rename} && $specs->{rename}->{ $name })
-        ? $specs->{rename}->{ $name }
-        : $specs->{prefix}
-            ? $specs->{prefix}->[1] . $name
-            : $name;
-
-    $calculated =~ s/^[\$\%\@]//g;
-
-    return $calculated;
+sub export_tag {
+    my $class = _find_export_class( \@_ );
+    my ( $tag, @list ) = @_;
+    $class->export_meta->push_tag( $tag, @list );
 }
 
-sub _normalize_export_args {
-    my ( $exporter, $item );
-
-    $item = pop( @_ ) if ref( $_[-1] );
-
-    if ( $_[0] ) {
-        my $blessed = blessed( $_[0] );
-        my $ref = ref( $_[0] );
-        my $is_var = (!$ref && $_[0] =~ m/^[\$\%\@]\w+[\w\d_]*$/) ? 1 : 0;
-        my $can_export = $is_var ? 0 : $_[0]->can( 'export' );
-
-        $exporter = shift( @_ ) if $blessed || $can_export;
-    }
-
-    $exporter = blessed( $exporter ) || $exporter || undef;
-    my ( $name, $parser ) = @_;
-
-    return ( $name, $exporter, $item, $parser );
+sub exports {
+    my $class = _find_export_class( \@_ );
+    my $meta = $class->export_meta;
+    _export( $class, undef, $_ ) for @_;
+    $meta->get_tag('all');
 }
 
-sub _export {
-    my ( $type, $caller, @args ) = @_;
-    my ( $name, $exporter, $item, $parser ) = _normalize_export_args( @args );
-    $exporter ||= $caller;
-
-    croak( "You must provide a name to $type\()" )
-        unless $name;
-
-    $item ||= _get_item_ref( $exporter, $name );
-    croak( "No ref found in '$exporter' for exported item '$name'" )
-        unless $item;
-
-    _verify_item_ref( $name, $item );
-
-    my $export;
-    my $parsers;
-    {
-        no strict 'refs';
-        no warnings 'once';
-        $export = \%{ $exporter . '::' . uc($type) };
-        $parsers = \%{ $exporter . '::PARSERS' };
-    }
-    $export->{ $name } = $item;
-    $parsers->{ $name } = $parser if $parser;
+sub default_exports {
+    my $class = _find_export_class( \@_ );
+    my $meta = $class->export_meta;
+    $meta->push_tag( 'default', _export( $class, undef, $_ ))
+        for @_;
+    $meta->get_tag('default');
 }
 
-sub _get_item_ref {
-    my ( $package, $item ) = @_;
-    my ( $type, $name ) = ( $item =~ m/^([\$\%\@])(\w+[\w\d_]*)$/ );
-
-    return $package->can( $item )
-        unless $type && $name;
-
-    my $varstring = "${type}\{'$package\::$name'\}";
-    return eval "no strict 'refs'; \\$varstring";
+sub parsed_exports {
+    my $class = _find_export_class( \@_ );
+    my ( $parser, @items ) = @_;
+    croak "no parser specified" unless $parser;
+    export( $class, $_, $parser ) for @items;
 }
 
-sub _verify_item_ref {
-    my ( $name, $item ) = @_;
-    my ( $type ) = ( $item =~ m/^([\$\%\@])$/ );
-    $type ||= '&';
-    1;
+sub parsed_default_exports {
+    my $class = _find_export_class( \@_ );
+    my ( $parser, @names ) = @_;
+    croak "no parser specified" unless $parser;
+    default_export( $class, $_, $parser ) for @names;
 }
 
 sub export {
-    my $caller = caller;
-    _export( 'export', $caller, @_ );
-}
-
-sub export_ok {
-    my $caller = caller;
-    _export( 'export_ok', $caller, @_ );
+    my $class = _find_export_class( \@_ );
+    _export( $class, undef, @_ );
 }
 
 sub gen_export {
-    my $caller = caller;
-    _export( 'gen_export', $caller, @_ );
+    my $class = _find_export_class( \@_ );
+    _export( $class, Generator(), @_ );
 }
 
-sub gen_export_ok {
-    my $caller = caller;
-    _export( 'gen_export_ok', $caller, @_ );
+sub default_export {
+    my $class = _find_export_class( \@_ );
+    my $meta = $class->export_meta;
+    $meta->push_tag( 'default', _export( $class, undef, @_ ));
+}
+
+sub gen_default_export {
+    my $class = _find_export_class( \@_ );
+    my $meta = $class->export_meta;
+    $meta->push_tag( 'default', _export( $class, Generator(), @_ ));
+}
+
+sub parser {
+    my $class = _find_export_class( \@_ );
+    my $name = shift;
+    my $code = pop;
+    croak "You must provide a name to parser()"
+        if !$name || ref $name;
+    croak "Too many parameters passed to parser()"
+        if @_ && defined $_[0];
+    $code ||= $class->can( $name );
+    croak "Could not find code for parser '$name'"
+        unless $code;
+
+    $class->export_meta->_parsers->{ $name } = $code;
+}
+
+sub import_options {
+    my $class = _find_export_class( \@_ );
+    my $meta = $class->export_meta;
+    $meta->add_options(@_) if @_;
+}
+
+sub import_arguments {
+    my $class = _find_export_class( \@_ );
+    my $meta = $class->export_meta;
+    $meta->add_arguments(@_) if @_;
+}
+
+sub _export {
+    my ( $class, $expclass, $name, @param ) = @_;
+    my $ref = ref($param[-1]) ? pop(@param) : undef;
+    my ( $parser ) = @param;
+    my $meta = $class->export_meta;
+
+    ( $ref, $name ) = $meta->get_ref_from_package( $name )
+        unless $ref;
+
+    ( my $type, $name ) = ($name =~ m/^([\$\@\&\%]?)(.*)$/);
+    $type = "" if $type eq '&';
+
+    my $fullname = "$type$name";
+
+    $expclass ||= reftype( $ref ) eq 'CODE'
+        ? Sub()
+        : Variable();
+
+    $expclass->new(
+        $ref,
+        exported_by => $class,
+        ($parser ? ( parser => $parser    )
+                 : (                      )),
+        ($type   ? ( type   => 'variable' )
+                 : ( type   => 'sub'      )),
+    );
+
+    $meta->add_export( $fullname, $ref );
+
+    return $fullname;
+}
+
+sub _find_export_class {
+    my $args = shift;
+
+    return shift( @$args )
+        if @$args
+        && eval { $args->[0]->can('export_meta') };
+
+    return caller(1);
+}
+
+sub reexport {
+    my $from = pop;
+    my $class = shift || caller;
+    $class->export_meta->reexport( $from );
 }
 
 1;
 
-__END__
-
 =head1 NAME
 
-Exporter::Declare - Declarative exports and simple Devel-Declare interface.
+Exporter::Declare - Declarative exporting, better import interface.
 
 =head1 DESCRIPTION
 
-Declarative function exporting. You can export subs as usual with @EXPORT, or
-export anonymous subs under whatever name you want. You can also extend
-Exporter::Declare very easily.
+Exporter::Declare is a declarative exporting tool that uses a meta data object
+to track exports on a per-object basis. It also provides tools to create a
+parameterized input() method so that you are not forced to wrap a black-box
+import() method.
 
-Exporter-Declare also provides a friendly interface to L<Devel::Declare> magic.
-With L<Devel::Declare::Parser> and its parser library, you can write
-L<Devel::Declare> enhanced functions without directly using Devel-Declare.
+Exporting tools can be frustrating, L<Exporter> is showing its age.
+L<Sub::Exporter> is a bit complicated for the module doing the exporting. Above
+all else most export modules install their own import() function that can be a
+pain to wrap or override without screwing something up.
 
-Exporter-Declare also supports tags, optional exports, and exported variables
-just like L<Exporter>.  An addition you can prefix or rename imports at import
-time.
-
-B<Exporter::Declare should be usable as a drop-in replacement for L<Exporter>>
-
-=head1 BASIC SYNOPSIS
-
-=head2 EXPORTING
-
-    package My::Exporter;
-    use strict;
-    use warnings;
-    use Exporter::Declare;
-
-    # works as expected
-    our @EXPORT = qw/a/;
-    our @EXPORT_OK = qw/f/;
-    our @EXPORT_TAGS = (
-        main => \@EXPORT,
-        other => \@EXPORT_OK,
-        mylist => [ ... ],
-        # Bonus!
-        dynamic => sub { $class = shift; return ( qw/a b/ )}
-    );
-
-    our $_ID = 1;
-    # Fancy export is generated each time
-    our %GEN_EXPORT_OK = ( ... );
-    our %GEN_EXPORT = (
-        importer_id => sub {
-            my ( $exporting_class, $importing_class ) = @_;
-            my $id = _ID++;
-            return sub { $id };
-        }
-    );
-
-    sub a { 'a' }
-
-    # Declare an anonymous export
-    export b => sub { 'b' };
-    export( 'c', sub { 'c' });
-
-    export 'd';
-    sub d { 'd' }
-
-    export_ok 'e';
-    sub e { 'e' }
-
-    sub f { 'f' }
-
-    export_ok g => sub g { 'g' }
-
-    # declarative generated export
-    {
-        my $alpha = 'A';
-        # can also use gen_export_ok
-        gen_export unique_alpha => sub {
-            my ( $exporting_class, $importing_class ) = @_;
-            my $uniq = $alpha++;
-            return sub { $uniq };
-        }
-    }
-
-    1;
-
-=head2 BASIC IMPORTING
-
-    package My::Consumer;
-    use strict;
-    use warnings;
-    use My::Exporter;
-
-    a(); #calls My::Consumer::a()
-    e(); # Will die, e() is in export_ok, not export
-
-=head1 ENHANCED INTERFACE SYNOPSIS
-
-Notice, no need for '=> sub', and trailing semicolon is optional.
-
-    package MyPackage;
-    use strict;
-    use warnings;
-    use Exporter::Declare;
-
-    # Declare an anonymous export
-    export b { 'b' }
-
-    export c {
-        'c'
-    }
-
-    1;
-
-=head1 EXPORTING DEVEL-DECLARE INTERFACES SYNOPSIS
-
-To export Devel-Declare magic you specify a parser as a second parameter to
-export(). Please see the PARSERS section for more information about each
-parser.
-
-    package MyPackage;
-    use strict;
-    use warnings;
-    use Exporter::Declare;
-
-    export sl sublike {
-        # $name and $sub are automatically shifted for you.
-        ...
-    }
-
-    export mth method {
-        # $name and $sub are automatically shifted for you.
-        ...
-    }
-
-    export cb codeblock {
-        # $sub is automatically shifted for you.
-        ...
-    }
-
-    export beg begin {
-        my @args = @_;
-        ...
-    };
-
-    # Inject something into the start of the code block
-    export injected method ( inject => 'my $arg2 = shift; ' ) { ... }
-
-Then to use those in the importing class:
-
-    use strict;
-    use warnings;
-    use MyPackage;
-
-    sl name { ... }
-
-    mth name {
-        # $self is automatically shifted for you.
-        ...
-    }
-
-    cb { ... }
-
-    # Same as BEGIN { beg(@args) };
-    beg( @args );
-
-=head1 MANY FACES OF EXPORT
-
-The export functions are the magical interface. They can be used in many forms.
-This is a complete guide to all forms. In practice a small subset is probably
-all most tools will use.
+Exporter declare solves these problems and more by providing the following:
 
 =over 4
 
-=item our @EXPORT = @names;
+=item Declarative Exporting (Like L<Moose> for Exporting)
 
-=item our @EXPORT_OK = @names;
+=item Meta Class Instead of Package Variables
 
-=item our %GEN_EXPORT = ( name => \&generator, ... );
+=item Hooks Into import()
 
-=item our %GEN_EXPORT_OK = ( name => \&generator, ... );
+=item Support For Export Groups (tags)
 
-Technically your not actually using the function here, but it is worth noting
-that use of a package variable '@EXPORT' works just like L<Exporter>.
+=item Export Generators (Subs And Variables)
 
-=item export($name)
+=item Higher Level Interface To L<Devel::Declare>
 
-=item export_ok($name)
+=item Clear And Concise OO API
 
-=item gen_export($name)
+=item All Exports Are Blessed
 
-=item gen_export_ok($name)
+=item Extended Import Syntax Based On L<Sub::Exporter>
 
-Export the sub specified by the string $name. This sub must be defined in the
-current package. Those with the 'gen_' prefix will treat the referenced sub as
-a generator.
+=item The '-alias' Tag Can Be Used On Any Exporter To Generate An Alias
 
-=item export($name, sub { ... })
+=back
 
-=item export_ok($name, sub { ... })
+=head1 SYNOPSIS
 
-=item export name => sub { ... }
+=head2 EXPORTER
 
-=item export_ok name => sub { ... }
+    package Some::Exporter;
+    use Exporter::Declare;
 
-=item gen_export($name, sub { ... })
+    default_exports qw/ do_the_thing /;
+    exports qw/ subA subB $SCALAR @ARRAY %HASH /;
 
-=item gen_export_ok($name, sub { ... })
+    export_tag subs => qw/ subA subB do_the_thing /;
+    export_tag vars => qw/ $SCALAR @ARRAY %HASH /;
 
-=item gen_export name => sub { ... }
+    import_options   qw/ optionA optionB /;
+    import_arguments qw/ optionC optionD /;
 
-=item gen_export_ok name => sub { ... }
+    # No need to fiddle with import() or do any wrapping.
+    # No need to parse the arguments yourself!
 
-=item export name { ... }
+    sub after_import {
+        my $class = shift;
+        my ( $importer, $specs ) = @_;
 
-=item export_ok name { ... }
+        do_option_a() if $specs->config->{optionA}
 
-=item gen_export name { ... }
+        do_option_c( $specs->config->{optionC} )
+            if $specs->config->{optionC}
 
-=item gen_export_ok name { ... }
+        print "-subs tag was used\n"
+            if $specs->config->{subs};
 
-Export the coderef under the specified name. In the second 2 forms an ending
-semicolon is optional, as well name can be quoted in single or double quotes,
-or left as a bareword.
+        print "exported 'subA'\n"
+            if $specs->exports->{subA};
+    }
+
+    ...
+
+=head2 IMPORTER
+
+    package Some::Importer;
+    use Some::Exporter qw/ subA $SCALAR !%HASH /,
+                        -default => { -prefix => 'my_' },
+                        qw/ -optionA !-optionB /,
+                        subB => { -as => 'sub_b' };
+
+    subA();
+    print $SCALAR;
+    sub_b();
+    my_do_the_thing();
+
+    ...
+
+=head2 ADVANCED EXPORTER
+
+    package Some::Exporter;
+    use Exporter::Declare qw/-magic reexport export_to /;
+
+    ... #Same as the basic exporter synopsis
+
+    Quoting is not necessary unless you have space or special characters
+    export another_sub;
+    export parsed_sub parser;
+
+    # no 'sub' keyword, not a typo
+    export anonymous_export {
+        ...
+    }
+    #No semicolon, not a typo
+
+    export parsed_anon parser {
+        ...
+    }
+
+    # Same as export
+    default_export name { ... }
+
+    export $VAR;
+    export %VAR;
+
+    # $ref can be a ref to code, hash, array, or scalar.
+    export name => $ref;
+
+    my $iterator = 'a';
+    gen_export unique_class_id {
+        my $current = $iterator++;
+        return sub { $current };
+    }
+
+    gen_default_export '$my_letter' {
+        my $letter = $iterator++;
+        return \$letter;
+    }
+
+    parser myparser {
+        ... See Devel::Declare
+    }
+
+    parsed_exports parser => qw/ parsed_sub_a parsed_sub_b /;
+    parsed_default_exports parser_b => qw/ parsed_sub_c /;
+
+    # Can re-export other Exporter::Declare exports, or even Exporter.pm based exports
+    reexport 'Another::Exporter';
+
+    export_to( $some_class, @args );
+
+=head1 IMPORT INTERFACE
+
+Importing from a package that uses Exporter::Declare will be familiar to anyone
+who has imported from modules before. Arguments are all assumed to be export
+names, unless prefixed with C<-> or C<:> In which case they may be a tag or an
+option. Exports without a sigil are assumed to be code exports, variable
+exports must be listed with their sigil.
+
+Items prefixed with the C<!> symbol are forcfully excluded, regardless of any
+listed item that may normally include them. Tags can also be excluded, this
+will effectively exclude everything in the tag.
+
+Tags are simply lists of exports, the exporting class may define any number of
+tags. Exporter::Declare also has the concept of options, they have the same
+syntax as tags. Options may be boolean or argument based. Boolean options are
+actually 3 value, undef, false C<!>, or true. Argument based options will grab
+the next value in the arguments list as their own, regardless of what type of
+value it is.
+
+When you use the module, or call import(), all the arguments are transformed
+into an L<Exporter::Declare::Specs> object. Arguments are parsed for you into a
+list of imports, and a configuration hash in which tags/options are keys. Tags
+are listed in the config hash as true, false, or undef depending on if they
+were included, negated, or unlisted. Boolean options will be treated in the
+same way as tags. Options that take arguments will have the argument as their
+value.
+
+=head2 SELECTING ITEMS TO IMPORT
+
+Exports can be subs, or package variables (scalar, hash, array). For subs
+simply ask for the sub by name, you may optionally prefix the subs name with
+the sub sigil C<&>. For variables list the variable name along with its sigil
+C<$, %, or @>.
+
+    use Some::Exporter qw/ somesub $somescalar %somehash @somearray /;
+
+=head2 TAGS
+
+Every exporter automatically has the following 3 tags, in addition they may
+define any number of custom tags. Tags can be specified by their name prefixed
+by either C<-> or C<:>.
+
+=over 4
+
+=item -all
+
+This tag may be used to import everything the exporter provides.
+
+=item -default
+
+This tag is used to import the default items exported. This will be used when
+no argument is provided to import.
+
+=item -alias
+
+Every package has an alias that it can export. This is the last segmant of the
+packages namespace. IE C<My::Long::Package::Name::Foo> could export the C<Foo()>
+function. These alias functionis simply return the full package name as a
+string, in this case C<'My::Long::Package::Name::Foo'>. This is similar to
+L<aliased>.
+
+The -alias tag is a shortcut so that you do not need to think about what the
+alias name would be when adding it to the import arguments.
+
+    use My::Long::Package::Name::Foo -alias;
+
+    my $foo = Foo()->new(...);
+
+=back
+
+=head2 RENAMING IMPORTED ITEMS
+
+You can prefix, suffix, or completely rename the items you import. Whenever an
+item is followed by a hash in the import list, that hash will be used for
+configuration. Configuration items always start with a dash C<->.
+
+The 3 available configuration options that effect import names are C<-prefix>,
+C<-suffix>, and C<-as>. If C<-as> is seen it will be used as is. If prefix or
+suffix are seen they will be attached to the original name (unless -as is
+present in which case they are ignored).
+
+    use Some::Exporter subA => { -as => 'DoThing' },
+                       subB => { -prefix => 'my_', -suffix => '_ok' };
+
+The example above will import C<subA()> under the name C<DoThing()>. It will
+also import C<subB()> under the name C<my_subB_ok()>.
+
+You may als specify a prefix and/or suffix for tags. The following example will
+import all the default exports with 'my_' prefixed to each name.
+
+    use Some::Exporter -default => { -prefix => 'my_' };
+
+=head2 OPTIONS
+
+Some exporters will recognise options. Options look just like tags, and are
+specified the same way. What options do, and how they effect things is
+exporter-dependant.
+
+    use Some::Exporter qw/ -optionA -optionB /;
+
+=head2 ARGUMENTS
+
+Some options require an argument. These options are just like other
+tags/options except that the next item in the argument list is slurped in as
+the option value.
+
+    use Some::Exporter -ArgOption    => 'Value, not an export',
+                       -ArgTakesHash => { ... };
+
+Once again available options are exporter specific.
+
+=head2 PROVIDING ARGUMENTS FOR GENERATED ITEMS
+
+Some items are generated at import time. These items may accept arguments.
+There are 3 ways to provide arguments, and they may all be mixed (though that
+is not recommended).
+
+As a hash
+
+    use Some::Exporter generated => { key => 'val', ... };
+
+As an array
+
+    use Some::Exporter generated => [ 'Arg1', 'Arg2', ... ];
+
+As an array in a config hash
+
+    use Some::Exporter generated => { -as => 'my_gen', -args => [ 'arg1', ... ]};
+
+You can use all three at once, but this is really a bad idea, documented for completeness:
+
+    use Some::Exporter generated => { -as => 'my_gen, key => 'value', -args => [ 'arg1', 'arg2' ]}
+                       generated => [ 'arg3', 'arg4' ];
+
+The example above will work fine, all the arguments will make it into the
+generator. The only valid reason for this to work is that you may provide
+arguments such as C<-prefix> to a tag that brings in generator(), while also
+desiring to give arguments to generator() independantly.
+
+=head1 PRIMARY EXPORT API
+
+With the exception of import(), all the following work equally well as
+functions or class methods.
+
+=over 4
+
+=item import( @args )
+
+The import() class method. This turns the @args list into an
+L<Exporter::Declare::Specs> object.
+
+=item exports( @add_items )
+
+Add items to be exported.
+
+=item @list = exports()
+
+Retrieve list of exports.
+
+=item default_exports( @add_items )
+
+Add items to be exported, and add them to the -default tag.
+
+=item @list = default_exports()
+
+List of exports in the -default tag
+
+=item import_options(@add_items)
+
+Specify boolean options that should be accepted at import time.
+
+=item import_arguments(@add_items)
+
+Specify options that should be accepted at import that take arguments.
+
+=item export_tag( $name, @add_items );
+
+Define an export tag, or add items to an existing tag.
+
+=back
+
+=head1 EXTENDED EXPORT API
+
+These all work fine in function or method form, however the syntax sugar will
+only work in function form.
+
+=over 4
+
+=item parsed_exports( $parser, @exports )
+
+Add exports that should use a 'Devel::Declare' based parser. The parser should
+be the name of a registered L<Devel::Declare::Interface> parser, or the name of
+a parser sub created using the parser() function.
+
+=item parsed_default_exports( $parser, @exports )
+
+Same as parsed_exports(), except exports are added to the -default tag.
+
+=item parser name { ... }
+
+=item parser name => \&code
+
+Define a parser. You need to be familiar with Devel::Declare to make use of
+this.
+
+=item reexport( $package )
+
+Make this exporter inherit all the exports and tags of $package. Works for
+Exporter::Declare or Exporter.pm based exporters. Re-Exporting of
+L<Sub::Exporter> based classes is not currently supported.
+
+=item export_to( $package, @args )
+
+Export to the specified class.
+
+=item export( $name )
+
+=item export( $name, $ref )
 
 =item export( $name, $parser )
 
-=item export_ok( $name, $parser )
+=item export( $name, $parser, $ref )
 
-=item gen_export( $name, $parser )
-
-=item gen_export_ok( $name, $parser )
-
-Export the sub specified by the string $name, applying the magic from the
-specified parser whenever the function is called by a class that imports it.
-
-=item export( $name, $parser, sub { ... })
-
-=item export_ok( $name, $parser, sub { ... })
-
-=item gen_export( $name, $parser, sub { ... })
-
-=item gen_export_ok( $name, $parser, sub { ... })
+=item export name { ... }
 
 =item export name parser { ... }
 
-=item export_ok name parser { ... }
+export is a keyword that lets you export any 1 item at a time. The item can be
+exported by name, name+ref, or name+parser+ref. You can also use it without
+parentheses or quotes followed by a codeblock. In the codeblock form the export
+is created, but there is no corresponding variable/sub in the packages
+namespace.
+
+=item default_export( $name )
+
+=item default_export( $name, $ref )
+
+=item default_export( $name, $parser )
+
+=item default_export( $name, $parser, $ref )
+
+=item default_export name { ... }
+
+=item default_export name parser { ... }
+
+=item gen_export( $name )
+
+=item gen_export( $name, $ref )
+
+=item gen_export( $name, $parser )
+
+=item gen_export( $name, $parser, $ref )
+
+=item gen_export name { ... }
 
 =item gen_export name parser { ... }
 
-=item gen_export_ok name parser { ... }
+=item gen_default_export( $name )
 
-Export the coderef under the specified name, applying the magic from the
-specified parser whenever the function is called by a class that imports it. In
-the second form name and parser can be quoted in single or double quotes, or
-left as a bareword.
+=item gen_default_export( $name, $ref )
 
-=item export name ( ... ) { ... }
+=item gen_default_export( $name, $parser )
 
-=item export_ok name ( ... ) { ... }
+=item gen_default_export( $name, $parser, $ref )
 
-=item gen_export name ( ... ) { ... }
+=item gen_default_export name { ... }
 
-=item gen_export_ok name ( ... ) { ... }
+=item gen_default_export name parser { ... }
 
-same as 'export name { ... }' except that parameters can be passed into the
-parser. Currently you cannot put any variables in the ( ... ) as it will be
-evaluated as a string outside of any closures - This may be fixed in the
-future.
-
-Name can be a quoted string or a bareword.
-
-=item export name parser ( ... ) { ... }
-
-=item export_ok name parser ( ... ) { ... }
-
-=item gen_export name parser ( ... ) { ... }
-
-=item gen_export_ok name parser ( ... ) { ... }
-
-same as 'export name parser { ... }' except that parameters can be passed into
-the parser. Currently you cannot put any variables in the ( ... ) as it will be
-evaluated as a string outside of any closures - This may be fixed in the
-future.
-
-Name and parser can be a quoted string or a bareword.
-
-=item $class->export( $name )
-
-=item $class->export_ok( $name )
-
-=item $class->gen_export( $name )
-
-=item $class->gen_export_ok( $name )
-
-Method form of 'export( $name )'. $name must be the name of a subroutine in the
-package $class. The export will be added as an export of $class.
-
-=item $class->export( $name, sub { ... })
-
-=item $class->export_ok( $name, sub { ... })
-
-=item $class->gen_export( $name, sub { ... })
-
-=item $class->gen_export_ok( $name, sub { ... })
-
-Method form of 'export( $name, \&code )'. The export will be added as an export
-of $class.
-
-=item $class->export( $name, $parser )
-
-=item $class->export_ok( $name, $parser )
-
-=item $class->gen_export( $name, $parser )
-
-=item $class->gen_export_ok( $name, $parser )
-
-Method form of 'export( $name, $parser )'. $name must be the name of a
-subroutine in the package $class. The export will be added as an export of
-$class.
-
-=item $class->export( $name, $parser, sub { ... })
-
-=item $class->export_ok( $name, $parser, sub { ... })
-
-=item $class->gen_export( $name, $parser, sub { ... })
-
-=item $class->gen_export_ok( $name, $parser, sub { ... })
-
-Method form of 'export( $name, $parser, \&code )'. The export will be added as
-an export of $class.
+These all act just like export(), except that they add subrefs as generators,
+and/or add exports to the -default tag.
 
 =back
 
-=head1 IMPORTER SYNOPSIS
+=head1 ADDITIONAL TAGS
 
-=head2 NORMAL
+=head2 -magic
 
-    package MyThing;
-    use MyThingThatExports;
-
-=head2 CUSTOMISING
-
-    package My::Consumer;
-    use strict;
-    use warnings;
-    use My::Exporter qw/ a !f :prefix:my_ :other !:mylist /,
-                     { a => 'apple' };
-
-    apple(); #calls My::Consumer::a(), renamed via the hash above
-
-    f(); # Will die, !f above means do not import
-
-    my_g(); # calls My::Consumer::e(), prefix applied, imported via :other
-
-    1;
+This brings in the magical (L<Devel::Declare>) functions in addition to the
+default.
 
 =over 4
 
-=item 'export_name'
+=item -default
 
-If you list an export it will be imported (unless it appears in a negated form)
+=item export
 
-=item '!export_name'
+=item gen_export
 
-The export will not be imported
+=item default_export
 
-=item { export_name => 'new_name' }
+=item gen_default_export
 
-Rename an import.
+=item parser
 
-=item ':prefix:VALUE'
+=item parsed_exports
 
-Specify that all imports should be renamed with the given prefix, unless they
-are already renamed via a rename hash.
-
-=item ':tag'
-
-=item '!:tag'
-
-Import all the exports listed by $EXPORT_TAGS{tag}. ! will negate the list. all
-tag names are valid unless they conflict with a specal keyword such as 'prefix'
-or 'extend'.
+=item parsed_default_exports
 
 =back
 
-=head1 Extending (Writing your own Exporter-Declare)
+=head1 INTERNAL API
 
-Doing this will make it so that importing your package will not only import
-your exports, but it will also make the importing package capable of exporting
-subs.
+Exporter/Declare.pm does not have much logic to speak of. Rather
+Exporter::Declare is sugar on top of class meta data stored in
+L<Exporter::Declare::Meta> objects. Arguments are parsed via
+L<Exporter::Declare::Specs>, and also turned into objects. Even exports are
+blessed references to the exported item itself, and handle the injection on
+their own (See L<Exporter::Declare::Export>).
 
-    package MyExporterDeclare;
-    use strict;
-    use warnings;
-    use Exporter::Declare ':extend';
+=head1 META CLASS
 
-    export my_export export {
-        my ( $name, $sub ) = @_;
-        export( $name, $sub );
-    }
-
-=head1 PARSERS
-
-=head2 Writing custom parsers
-
-See L<Devel::Declare::Parser>
-
-=head2 Provided Parsers
-
-=over 4
-
-=item L<Devel::Declare::Parser::Export>
-
-Used for functions that export, accepting a name, a parser, and options.
-
-=item L<Devel::Declare::Parser::Sublike>
-
-Things that act like 'sub name {}'
-
-=item L<Devel::Declare::Parser::Method>
-
-Same ad Sublike except codeblocks have $self automatically shifted off.
-
-=item L<Devel::Declare::Parser::Codeblock>
-
-Things that take a single codeblock as an arg. Like defining sub mysub(&)
-except that you do not need a semicolon at the end.
-
-=item L<Devel::Declare::Parser::Begin>
-
-Define a sub that works like 'use' in that it runs at compile time (like
-wrapping it in BEGIN{})
-
-This requires L<Devel::BeginLift>.
-
-=back
-
-=head1 FENNEC PROJECT
-
-This module is part of the Fennec project. See L<Fennec> for more details.
-Fennec is a project to develop an extendable and powerful testing framework.
-Together the tools that make up the Fennec framework provide a potent testing
-environment.
-
-The tools provided by Fennec are also useful on their own. Sometimes a tool
-created for Fennec is useful outside the greator framework. Such tools are
-turned into their own projects. This is one such project.
-
-=over 2
-
-=item L<Fennec> - The core framework
-
-The primary Fennec project that ties them all together.
-
-=back
+All exporters have a meta class, the only way to get the meta object is to call
+the exporter_meta() method on the class/object that is an exporter. Any class
+that uses Exporter::Declare gets this method, and a meta-object.
 
 =head1 AUTHORS
 
@@ -798,6 +679,6 @@ Copyright (C) 2010 Chad Granum
 
 Exporter-Declare is free software; Standard perl licence.
 
-Exporter-Declare is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE.  See the license for more details.
+Exporter-Declare is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE.  See the license for more details.

@@ -1,5 +1,5 @@
 ---
-abstract: 'Declarative exports and simple Devel-Declare interface.'
+abstract: 'Declarative exporting, better import interface.'
 author:
   - 'Chad Granum <exodist7@gmail.com>'
 configure_requires:
@@ -13,18 +13,31 @@ name: Exporter-Declare
 provides:
   Exporter::Declare:
     file: lib/Exporter/Declare.pm
-    version: 0.025
+    version: 0.100
   Exporter::Declare::Export:
     file: lib/Exporter/Declare/Export.pm
+  Exporter::Declare::Export::Alias:
+    file: lib/Exporter/Declare/Export/Alias.pm
+  Exporter::Declare::Export::Generator:
+    file: lib/Exporter/Declare/Export/Generator.pm
+  Exporter::Declare::Export::Sub:
+    file: lib/Exporter/Declare/Export/Sub.pm
+  Exporter::Declare::Export::Variable:
+    file: lib/Exporter/Declare/Export/Variable.pm
+  Exporter::Declare::Meta:
+    file: lib/Exporter/Declare/Meta.pm
+  Exporter::Declare::Parser:
+    file: lib/Exporter/Declare/Parser.pm
+  Exporter::Declare::Specs:
+    file: lib/Exporter/Declare/Specs.pm
 requires:
   Carp: 0
   Devel::Declare::Parser: 0.017
   Scalar::Util: 0
-  Test::Exception::LessClever: 0.005
-  Test::Simple: 0.88
+  aliased: 0
 resources:
   bugtracker: http://github.com/exodist/Exporter-Declare/issues
   homepage: http://open-exodus.net/projects/Exporter-Declare
   license: http://dev.perl.org/licenses/
   repository: http://github.com/exodist/Exporter-Declare
-version: 0.025
+version: 0.100
