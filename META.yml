@@ -4,11 +4,11 @@ author:
   - 'Chad Granum <exodist7@gmail.com>'
 build_requires:
   Fennec::Lite: 0.004
-  Test::Exception: 0
+  Test::Exception: 0.29
   Test::Simple: 0.88
 configure_requires:
   Module::Build: 0.36
-generated_by: 'Module::Build version 0.3607'
+generated_by: 'Module::Build version 0.3603'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -17,7 +17,7 @@ name: Exporter-Declare
 provides:
   Exporter::Declare:
     file: lib/Exporter/Declare.pm
-    version: 0.101
+    version: 0.102
   Exporter::Declare::Export:
     file: lib/Exporter/Declare/Export.pm
   Exporter::Declare::Export::Alias:
@@ -28,15 +28,19 @@ provides:
     file: lib/Exporter/Declare/Export/Sub.pm
   Exporter::Declare::Export::Variable:
     file: lib/Exporter/Declare/Export/Variable.pm
+  Exporter::Declare::Magic:
+    file: lib/Exporter/Declare/Magic.pm
+  Exporter::Declare::Magic::Parser:
+    file: lib/Exporter/Declare/Magic/Parser.pm
+  Exporter::Declare::Magic::Sub:
+    file: lib/Exporter/Declare/Magic/Sub.pm
   Exporter::Declare::Meta:
     file: lib/Exporter/Declare/Meta.pm
-  Exporter::Declare::Parser:
-    file: lib/Exporter/Declare/Parser.pm
   Exporter::Declare::Specs:
     file: lib/Exporter/Declare/Specs.pm
 requires:
   Carp: 0
-  Devel::Declare::Parser: 0.017
+  Meta::Builder: 0.003
   Scalar::Util: 0
   aliased: 0
 resources:
@@ -44,4 +48,4 @@ resources:
   homepage: http://open-exodus.net/projects/Exporter-Declare
   license: http://dev.perl.org/licenses/
   repository: http://github.com/exodist/Exporter-Declare
-version: 0.101
+version: 0.102
