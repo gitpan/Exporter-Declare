@@ -1,5 +1,5 @@
 ---
-abstract: 'Declarative exporting, better import interface.'
+abstract: 'Exporting done right'
 author:
   - 'Chad Granum <exodist7@gmail.com>'
 build_requires:
@@ -17,7 +17,7 @@ name: Exporter-Declare
 provides:
   Exporter::Declare:
     file: lib/Exporter/Declare.pm
-    version: 0.102
+    version: 0.103
   Exporter::Declare::Export:
     file: lib/Exporter/Declare/Export.pm
   Exporter::Declare::Export::Alias:
@@ -43,9 +43,10 @@ requires:
   Meta::Builder: 0.003
   Scalar::Util: 0
   aliased: 0
+  perl: v5.8.0
 resources:
   bugtracker: http://github.com/exodist/Exporter-Declare/issues
   homepage: http://open-exodus.net/projects/Exporter-Declare
   license: http://dev.perl.org/licenses/
   repository: http://github.com/exodist/Exporter-Declare
-version: 0.102
+version: 0.103
