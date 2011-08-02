@@ -11,7 +11,6 @@ lib/Exporter/Declare/Magic/Sub.pm
 lib/Exporter/Declare/Meta.pm
 lib/Exporter/Declare/Specs.pm
 MANIFEST			This list of files
-META.yml
 README
 t/Declare.t
 t/Export.t
@@ -24,3 +23,5 @@ t/reexport.t
 t/Specs.t
 t/Sub.t
 t/Variable.t
+META.yml
+META.json
