@@ -12,7 +12,7 @@ use aliased 'Exporter::Declare::Export::Generator';
 
 BEGIN { Meta->new( __PACKAGE__ )}
 
-our $VERSION = '0.104';
+our $VERSION = '0.105';
 our @CARP_NOT = qw/
     Exporter::Declare
     Exporter::Declare::Specs
@@ -48,9 +48,17 @@ export_tag( magic => qw/
 sub import {
     my $class = shift;
     my $caller = caller;
-    $class->before_import( $caller, \@_ )
+
+    $class->alter_import_args( $caller, \@_ )
+        if $class->can( 'alter_import_args' );
+
+    my $specs = _parse_specs( $class, @_ );
+
+    $class->before_import( $caller, $specs )
         if $class->can( 'before_import' );
-    my $specs = export_to( $class, $caller, @_ );
+
+    $specs->export( $caller );
+
     $class->after_import( $caller, $specs )
         if $class->can( 'after_import' );
 }
@@ -67,16 +75,22 @@ sub after_import {
     export_to( 'Exporter::Declare::Magic', $caller, @$args );
 }
 
-sub export_to {
+sub _parse_specs {
     my $class = _find_export_class( \@_ );
-    my ( $dest, @args ) = @_;
+    my ( @args ) = @_;
 
     # XXX This is ugly!
     unshift @args => '-default'
         if $class eq __PACKAGE__
         && grep { $_ eq '-magic' } @args;
 
-    my $specs = Specs->new( $class, @args );
+    return Specs->new( $class, @args );
+}
+
+sub export_to {
+    my $class = _find_export_class( \@_ );
+    my ( $dest, @args ) = @_;
+    my $specs = _parse_specs( $class, @args );
     $specs->export( $dest );
     return $specs;
 }
@@ -282,8 +296,8 @@ system allows for top-notch introspection.
     };
 
     # You can create a function to mangle the arguments before they are
-    # modified by import()
-    sub before_import {
+    # parsed into a Exporter::Declare::Spec object.
+    sub alter_import_args {
        my ($class, $args) = @_;
 
        # fiddle with args before importing routines are called
@@ -292,7 +306,19 @@ system allows for top-notch introspection.
 
     # There is no need to fiddle with import() or do any wrapping.
     # the $specs data structure means you generally do not need to parse
-    # arguments yourself (but you can if you want using before_import())
+    # arguments yourself (but you can if you want using alter_import_args())
+
+    # Change the spec object before export occurs
+    sub before_import {
+        my $class = shift;
+        my ( $importer, $specs ) = @_;
+
+        if ($specs->config->{optionA}) {
+            # Modify $spec attributes accordingly
+        }
+    }
+
+    # Use spec object after export occurs
     sub after_import {
         my $class = shift;
         my ( $importer, $specs ) = @_;

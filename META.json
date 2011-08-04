@@ -39,7 +39,7 @@
    "provides" : {
       "Exporter::Declare" : {
          "file" : "lib/Exporter/Declare.pm",
-         "version" : "0.104"
+         "version" : "0.105"
       },
       "Exporter::Declare::Export" : {
          "file" : "lib/Exporter/Declare/Export.pm",
@@ -95,5 +95,5 @@
          "url" : "http://github.com/exodist/Exporter-Declare"
       }
    },
-   "version" : "0.104"
+   "version" : "0.105"
 }
