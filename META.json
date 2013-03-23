@@ -39,7 +39,7 @@
    "provides" : {
       "Exporter::Declare" : {
          "file" : "lib/Exporter/Declare.pm",
-         "version" : "0.106"
+         "version" : "0.107"
       },
       "Exporter::Declare::Export" : {
          "file" : "lib/Exporter/Declare/Export.pm",
@@ -59,18 +59,6 @@
       },
       "Exporter::Declare::Export::Variable" : {
          "file" : "lib/Exporter/Declare/Export/Variable.pm",
-         "version" : 0
-      },
-      "Exporter::Declare::Magic" : {
-         "file" : "lib/Exporter/Declare/Magic.pm",
-         "version" : 0
-      },
-      "Exporter::Declare::Magic::Parser" : {
-         "file" : "lib/Exporter/Declare/Magic/Parser.pm",
-         "version" : 0
-      },
-      "Exporter::Declare::Magic::Sub" : {
-         "file" : "lib/Exporter/Declare/Magic/Sub.pm",
          "version" : 0
       },
       "Exporter::Declare::Meta" : {
@@ -95,5 +83,5 @@
          "url" : "http://github.com/exodist/Exporter-Declare"
       }
    },
-   "version" : "0.106"
+   "version" : "0.107"
 }
