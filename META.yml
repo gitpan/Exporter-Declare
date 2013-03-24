@@ -18,7 +18,7 @@ name: Exporter-Declare
 provides:
   Exporter::Declare:
     file: lib/Exporter/Declare.pm
-    version: 0.108
+    version: 0.109
   Exporter::Declare::Export:
     file: lib/Exporter/Declare/Export.pm
     version: 0
@@ -51,4 +51,4 @@ resources:
   homepage: http://open-exodus.net/projects/Exporter-Declare
   license: http://dev.perl.org/licenses/
   repository: http://github.com/exodist/Exporter-Declare
-version: 0.108
+version: 0.109
