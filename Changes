@@ -1,0 +1,10 @@
+WARNING: This file is very likely to get out of date, I almost never remeber to
+update it.
+
+0.111:
+ * Fix broken inheritance, better fix for UNIVERAL::can sillyness
+
+0.110:
+ * Fixed 'can() used as function' warning that sometimes happens
+ * Fixed brocken magic.t unit test
+

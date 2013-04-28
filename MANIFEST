@@ -1,4 +1,5 @@
 Build.PL
+Changes
 lib/Exporter/Declare.pm
 lib/Exporter/Declare/Export.pm
 lib/Exporter/Declare/Export/Alias.pm
@@ -14,6 +15,9 @@ README
 t/Declare.t
 t/Export.t
 t/Generator.t
+t/Inheritance.t
+t/lib/InheritanceChild.pm
+t/lib/InheritanceParent.pm
 t/Magic.t
 t/Meta.t
 t/Meta_From_Old.t
